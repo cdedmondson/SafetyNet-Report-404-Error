@@ -5,7 +5,7 @@
 # Issue: SafetyNet reports displaying HTTP 404
 #        errors after upgrade.
 #
-# Last modified: 2/05/2023 C.E.
+# Last modified: 2/08/2023 C.E.
 #
 #################################################
 
@@ -22,7 +22,7 @@
 # Step 2b. Check the entire system for apache tomcat, starting from the root directory "/", if tomcat is found, 
 #          update the "PATH_TO_APACHE_TOMCAT_DIRECTORY" variable with the path. Otherwise, exit the script.
 
-# Step 3. Check the "/opt/SafetyNetReportUI.war" directory for the file, if it exists, copy it to the "apache-tomcat-*/webapps/"
+# Step 3. Check the if the "SafetyNetReportUI.war" file exists in the "/opt/SafetyNetReportUI.war" direct path, if it exists, copy it to the "apache-tomcat-*/webapps/"
 #         directory found in step 2.
 
 # Step 3a. If the file is not found in the "/opt/SafetyNetReportUI.war" direct path, search the entire "/opt" directory,
@@ -47,6 +47,10 @@ OPT_DIRECTORY='/opt'
 ROOT_DIRECTORY='/'
 FILE='f'
 DIRECTORY='d'
+
+RED='\033[0;31m'          # Red
+GREEN='\033[0;32m'        # Green
+END_COLOR='\033[0m'       # End color
 
 ######################### Variable Assignments END ###########################
 
@@ -106,7 +110,7 @@ check_If_User_Is_Root()
 	if [[ "${UID}" -ne 0 ]] # If the users ID is not equal to zero i.e. the user is not root
 	then
 	   echo "Root privileges are needed to execute this script."
-	   echo "Run the script with sudo permissions or as root user"
+	   echo -e "Run the script with ${RED}sudo${END_COLOR} permissions or as root user"
 	   exit_Script # End the script with exit code 1
 	fi
 }
@@ -118,7 +122,9 @@ locate_Apache_Directory()
 	# in the "/opt/apache-tomcat-*/webapps/" directory
 	if search ${PATH_TO_APACHE_TOMCAT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'search_only'
 	then
-	   echo "\"${SAFETYNET_REPORT_UI_WAR_FILE}\" exists in the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\" directory"
+           search ${PATH_TO_APACHE_TOMCAT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'update_apache_path'
+	   echo -e "${GREEN}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} file exists in the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\"${END_COLOR} directory."
+           make_Sure_Apache_Services_Are_Running
 	   exit_Script # End the script with exit code 1
 	# Step 2a.
 	else
@@ -127,7 +133,7 @@ locate_Apache_Directory()
 	    # If apache tomcat is found in the "/opt" directory, then update the "PATH_TO_APACHE_TOMCAT_DIRECTORY" variable with the path
 	    then 
 		search ${OPT_DIRECTORY} ${DIRECTORY} ${LOCATE_APACHE} 'update_apache_path'
-		echo "Apache Tomcat is installed in the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\" directory."
+		echo -e "Apache Tomcat is installed in the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\"${END_COLOR} directory."
 	    # Step 2b.
 	    # Else check the entire system starting from the root directory "/" for apache tomcat
 	    else 
@@ -136,7 +142,7 @@ locate_Apache_Directory()
 		# Then update the "PATH_TO_APACHE_TOMCAT_DIRECTORY" variable with the correct path
 		then 
 		    search ${ROOT_DIRECTORY} ${DIRECTORY} ${LOCATE_APACHE} 'update_apache_path'
-		    echo "Apache Tomcat is installed in the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\" directory."
+		    echo -e "Apache Tomcat is installed in the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}\"${END_COLOR} directory."
 		# Else apache is not installed on the server exit script
 		else 
 		    echo "\"Apache Tomcat\" is not installed on this server"
@@ -148,28 +154,38 @@ locate_Apache_Directory()
 
 locate_SafetyNetReportUI_File()
 {
+	# Sanity check, make sure the "SafetyNetReportUI.war" does not already exist in the newly discovered apache tomcat directory.
+	if [[ -f "${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/${SAFETYNET_REPORT_UI_WAR_FILE}" ]]
+	then
+            echo -e "${GREEN}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} file already exists in the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps\"${END_COLOR} directory."
+            make_Sure_Apache_Services_Are_Running
+	    exit_Script
+	fi
+	
 	# Step 3. 
 	# Check if "/opt/SafetyNetReportUI.war" exists
 	if [[ -f "${OPT_DIRECTORY}/${SAFETYNET_REPORT_UI_WAR_FILE}" ]]
 	then
-	    echo "Copying \"/opt/${SAFETYNET_REPORT_UI_WAR_FILE}\" to the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\" directory."
+	    echo -e "Copying ${GREEN}\"/opt/${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} to the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\"${END_COLOR} directory."
 	    copy_SafetyNet_Report_To_Apache_Directory 'default_location'
+	# Step 3a
 	else
 	    echo "Searching the \"/opt\" directory"
 	    if search ${OPT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'search_only'
 	    then
-		echo "Copying \"${SAFETYNET_REPORT_UI_WAR_FILE}\" to the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\" directory."
+		echo -e "Copying ${GREEN}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} to the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\"${END_COLOR} directory."
 		search ${OPT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'update_safetynet_report_file_path'
 		copy_SafetyNet_Report_To_Apache_Directory 'other_location'
+	    # Step 3b.
 	    else
-		echo "Searching the entire system for the \"${SAFETYNET_REPORT_UI_WAR_FILE}\" file."
+		echo -e "Searching the entire system for the ${GREEN}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} file."
 		if search ${ROOT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'search_only'
 		then
-		    echo "Copying \"${SAFETYNET_REPORT_UI_WAR_FILE}\" to the \"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\" directory."
+		    echo -e "Copying ${GREEN}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} to the ${GREEN}\"${PATH_TO_APACHE_TOMCAT_DIRECTORY}/webapps/\"${END_COLOR} directory."
 		    search ${ROOT_DIRECTORY} ${FILE} ${SAFETYNET_REPORT_UI_WAR_FILE} 'update_safetynet_report_file_path'
 		    copy_SafetyNet_Report_To_Apache_Directory 'other_location'
 		else
-		    echo "File does not exist on system"
+		    echo -e "${RED}\"${SAFETYNET_REPORT_UI_WAR_FILE}\"${END_COLOR} file does not exist on system"
 		    exit_Script
 		fi
 	    fi 
@@ -182,11 +198,12 @@ make_Sure_Apache_Services_Are_Running()
 	# Check if tomcat is running
 	if [[ $(ps -ef | grep tomca[t] | wc -l) -gt 0 ]]
 	then
-	   echo 'Apache Tomcat is running'
+	   echo "Apache Tomcat is running."
 	else
-	    echo "Apache Tomcat is not running"
-	    echo "Starting Apache server"
-	    sudo systemctl start httpd.service # Start apache server
+	    echo "Apache Tomcat is not running."
+	    echo -e "Start Apache server by executing the ${RED}startup.sh${END_COLOR} or ${RED}catalina.sh${END_COLOR} script located in the ${RED}${PATH_TO_APACHE_TOMCAT_DIRECTORY}/bin/${END_COLOR} directory."
+	    cd "${PATH_TO_APACHE_TOMCAT_DIRECTORY}/bin/"
+	    ls -l
 	fi
 }
 
